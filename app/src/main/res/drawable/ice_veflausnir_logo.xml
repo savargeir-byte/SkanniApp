@@ -19,11 +19,9 @@
         android:pathData="M28,14 C28,12 29.5,10 32,10 C34.5,10 36,12 36,14 L36,18 C36,20 34.5,22 32,22 C29.5,22 28,20 28,18 Z M28,26 C28,24 29.5,22 32,22 C34.5,22 36,24 36,26 C36,28 34.5,30 32,30 C29.5,30 28,28 28,26 Z"/>
     
     <!-- Circle with waves -->
-    <circle
+    <path
         android:fillColor="#4CAF50"
-        android:cx="50"
-        android:cy="20"
-        android:r="12"/>
+        android:pathData="M38,20 C38,13.4 43.4,8 50,8 C56.6,8 62,13.4 62,20 C62,26.6 56.6,32 50,32 C43.4,32 38,26.6 38,20 Z"/>
     
     <!-- Wave inside circle -->
     <path
