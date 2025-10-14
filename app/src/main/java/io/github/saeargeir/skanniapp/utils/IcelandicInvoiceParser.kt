@@ -272,9 +272,9 @@ object IcelandicInvoiceParser {
         }
         
         // ADDITIONAL LOGIC: Look for standalone amounts on lines (common in Icelandic receipts)
-        Log.d(TAG, "🔍 Looking for standalone amounts in ${lines.size} lines...")
-        val lines = text.split("\\n").map { it.trim() }
-        for ((lineIndex, line) in lines.withIndex()) {
+        Log.d(TAG, "🔍 Looking for standalone amounts in text lines...")
+        val textLines = text.split("\\n").map { it.trim() }
+        for ((lineIndex, line) in textLines.withIndex()) {
             Log.v(TAG, "   Line $lineIndex: '$line'")
             
             // Look for lines that are likely total amounts
@@ -285,12 +285,12 @@ object IcelandicInvoiceParser {
                 Log.d(TAG, "   Line $lineIndex looks like amount: '$line'")
                 
                 // Check if this line is near "Samtals" or similar
-                val contextLines = (maxOf(0, lineIndex-2)..minOf(lines.size-1, lineIndex+2))
-                val contextText = contextLines.map { i -> "$i:${lines[i]}" }.joinToString(" | ")
+                val contextLines = (maxOf(0, lineIndex-2)..minOf(textLines.size-1, lineIndex+2))
+                val contextText = contextLines.map { i -> "$i:${textLines[i]}" }.joinToString(" | ")
                 Log.d(TAG, "   Context: $contextText")
                 
                 val hasContext = contextLines.any { i -> 
-                    val contextLine = lines[i].lowercase()
+                    val contextLine = textLines[i].lowercase()
                     contextLine.contains("samtals") ||
                     contextLine.contains("alls") ||
                     contextLine.contains("total") ||

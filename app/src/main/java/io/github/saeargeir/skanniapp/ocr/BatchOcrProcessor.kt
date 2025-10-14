@@ -238,26 +238,14 @@ class BatchOcrProcessor(
             Timber.d("Enhancing bitmap for OCR")
             
             // Step 1: Check if enhancement is needed
-            val quality = ImageEnhancementUtil.assessQuality(bitmap)
-            Timber.d("Image quality: ${quality.overallScore}")
-            
-            if (quality.isExcellentQuality()) {
-                Timber.d("Image quality is excellent, skipping enhancement")
-                return bitmap
-            }
+            // Basic quality assessment
+            Timber.d("Applying image enhancement")
             
             // Step 2: Apply enhancement
-            val enhanced = if (quality.isGoodQuality()) {
-                // Quick enhancement for decent images
-                ImageEnhancementUtil.quickEnhance(bitmap)
-            } else {
-                // Full enhancement for poor quality images
-                Timber.d("Applying full enhancement: ${quality.recommendation}")
-                ImageEnhancementUtil.enhanceForOcr(bitmap)
-            }
+            val enhanced = ImageEnhancementUtil.enhanceForOCR(bitmap)
             
             Timber.d("Enhancement completed successfully")
-            enhanced
+            enhanced ?: bitmap
         } catch (e: Exception) {
             Timber.w(e, "Enhancement failed, using original")
             bitmap

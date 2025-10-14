@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -19,7 +20,6 @@ import com.google.firebase.auth.FirebaseAuth
 import io.github.saeargeir.skanniapp.firebase.FirebaseAuthService
 import io.github.saeargeir.skanniapp.ui.auth.AuthScreen
 import io.github.saeargeir.skanniapp.ui.theme.SkanniAppTheme
-import io.github.saeargeir.skanniapp.ui.scanner.InvoiceScannerScreen
 import io.github.saeargeir.skanniapp.ui.scanner.EnhancedInvoiceScannerScreen
 import io.github.saeargeir.skanniapp.ui.settings.SettingsScreen
 import io.github.saeargeir.skanniapp.utils.CsvExporter
@@ -120,10 +120,25 @@ class MainActivity : ComponentActivity() {
             )
         } else if (showScanner) {
             EnhancedInvoiceScannerScreen(
-                onInvoiceScanned = { scannedInvoice ->
-                    // Apply learned corrections
+                onClose = { showScanner = false },
+                onResult = { scannedText, imageUri ->
+                    // Process the scanned text
                     lifecycleScope.launch {
-                        val correctedInvoice = userFeedbackManager.applyLearnedCorrections(scannedInvoice)
+                        val parsedInvoice = IcelandicInvoiceParser.parseInvoiceText(scannedText)
+                        val invoice = InvoiceRecord(
+                            id = System.currentTimeMillis(),
+                            date = parsedInvoice.date ?: java.time.LocalDate.now().toString(),
+                            monthKey = (parsedInvoice.date ?: java.time.LocalDate.now().toString()).substring(0, 7),
+                            vendor = parsedInvoice.vendor,
+                            amount = parsedInvoice.amount,
+                            vat = parsedInvoice.vat,
+                            imagePath = imageUri?.toString() ?: "",
+                            invoiceNumber = parsedInvoice.invoiceNumber,
+                            ocrText = scannedText
+                        )
+                        
+                        // Apply learned corrections
+                        val correctedInvoice = userFeedbackManager.applyLearnedCorrections(invoice)
                         
                         // Save to local storage
                         addNote(correctedInvoice)
@@ -137,36 +152,6 @@ class MainActivity : ComponentActivity() {
                         showScanner = false
                         navScreen = "form"
                     }
-                },
-                onClose = { showScanner = false },
-                onResult = { text, imageUri ->
-                    // Use improved Icelandic invoice parser
-                    val parsed = IcelandicInvoiceParser.parseInvoiceText(text)
-                    
-                    val invoice = io.github.saeargeir.skanniapp.model.InvoiceRecord(
-                        id = System.currentTimeMillis(),
-                        date = LocalDate.now().toString(),
-                        monthKey = LocalDate.now().toString().substring(0, 7),
-                        vendor = parsed.vendor,
-                        amount = parsed.amount,
-                        vat = parsed.vat,
-                        imagePath = imageUri?.toString() ?: "",
-                        invoiceNumber = parsed.invoiceNumber,
-                        ocrText = text,
-                        classificationConfidence = parsed.confidence.toDouble()
-                    )
-                    currentInvoice = invoice
-                    addNote(invoice)
-                    ocrText = text
-                    showScanner = false
-                    
-                    // Show success message with parsed information
-                    val vendorText = if (parsed.vendor.isNotBlank()) parsed.vendor else "Óþekktur seljandi"
-                    val amountText = if (parsed.amount > 0) "${parsed.amount} kr" else "Óþekkt upphæð"
-                    Toast.makeText(this@MainActivity, "Reikningur skráður: $vendorText - $amountText", Toast.LENGTH_LONG).show()
-                    
-                    // Go back to notes screen to see the new invoice
-                    navScreen = "notes"
                 }
             )
         } else when (navScreen) {
@@ -437,7 +422,7 @@ class MainActivity : ComponentActivity() {
                 onBackup = {
                     lifecycleScope.launch {
                         if (auth?.currentUser != null) {
-                            firebaseDataService.createBackup(notes).onSuccess {
+                            firebaseDataService.createBackup().onSuccess {
                                 Toast.makeText(this@MainActivity, "Öryggisafrit búið til", Toast.LENGTH_SHORT).show()
                             }.onFailure { error ->
                                 Toast.makeText(this@MainActivity, 

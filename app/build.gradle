@@ -3,9 +3,6 @@ apply plugin: 'org.jetbrains.kotlin.android'
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'kotlin-kapt'
 
-// Redirect build outputs to avoid Windows file lock issues on default build dir
-buildDir = "build_android${System.currentTimeMillis()}"
-
 android {
     namespace 'io.github.saeargeir.skanniapp'
     compileSdk 34
@@ -120,6 +117,9 @@ dependencies {
     
     // Coil for image loading
     implementation 'io.coil-kt:coil-compose:2.5.0'
+    
+    // Gson for JSON serialization
+    implementation 'com.google.code.gson:gson:2.10.1'
     
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'androidx.room:room-testing:2.6.1'

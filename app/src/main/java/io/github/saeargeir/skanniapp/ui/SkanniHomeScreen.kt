@@ -21,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.saeargeir.skanniapp.ui.components.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,13 +40,12 @@ fun SkanniHomeScreen(
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showFloatingMenu by remember { mutableStateOf(false) }
     
-    ResponsiveContainer {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.radialGradient(
+                    colors = listOf(
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
@@ -154,16 +152,16 @@ fun SkanniHomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .responsivePadding()
+                    .padding(16.dp) // Basic padding instead of responsivePadding
                     .padding(bottom = 140.dp), // Increased padding even more for navigation bar
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // App logo and intro with animation
                 Spacer(modifier = Modifier.height(48.dp))
 
-                AnimatedCard(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    animationDelay = 100
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(24.dp),
@@ -193,15 +191,14 @@ fun SkanniHomeScreen(
                             textAlign = TextAlign.Center
                         )
                     }
->>>>>>> 8d39cbf37ef2ffad080809e4ee3572eb3f96b504
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
                 // Professional action buttons using new components
-                AnimatedCard(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    animationDelay = 200
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(24.dp)
@@ -216,21 +213,25 @@ fun SkanniHomeScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         // Main scanning buttons
-                        SkanniActionButton(
+                        Button(
                             onClick = onScan,
-                            text = "Skanna einn reikning",
-                            icon = Icons.Default.Camera,
-                            style = ButtonStyle.Primary
-                        )
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Camera, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Skanna einn reikning")
+                        }
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        SkanniActionButton(
+                        OutlinedButton(
                             onClick = onBatchScan,
-                            text = "Fjöldaskanning (Pro)",
-                            icon = Icons.Default.CameraAlt,
-                            style = ButtonStyle.Secondary
-                        )
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Fjöldaskanning (Pro)")
+                        }
                     }
                 }
 
@@ -359,35 +360,14 @@ fun SkanniHomeScreen(
             Spacer(modifier = Modifier.height(48.dp))
         }
         
-        // Floating action menu for export functions
-        SkanniFloatingActionMenu(
-            isExpanded = showFloatingMenu,
-            onExpandedChange = { showFloatingMenu = it },
+        // Simple floating action button for menu
+        FloatingActionButton(
+            onClick = onMenu,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            mainAction = FloatingActionConfig(
-                text = "Aðgerðir",
-                icon = Icons.Default.MoreVert,
-                onClick = { }
-            ),
-            secondaryActions = listOf(
-                FloatingActionConfig(
-                    text = "Flytja út CSV",
-                    icon = Icons.Default.FileDownload,
-                    onClick = onExportCsv
-                ),
-                FloatingActionConfig(
-                    text = "Flytja út JSON",
-                    icon = Icons.Default.DataObject,
-                    onClick = onExportJson
-                ),
-                FloatingActionConfig(
-                    text = "Senda Excel",
-                    icon = Icons.Default.AttachFile,
-                    onClick = onSendExcel
-                )
-            )
-        )
+                .padding(16.dp)
+        ) {
+            Icon(Icons.Default.Menu, contentDescription = "Menu")
+        }
     }
-}}
+}

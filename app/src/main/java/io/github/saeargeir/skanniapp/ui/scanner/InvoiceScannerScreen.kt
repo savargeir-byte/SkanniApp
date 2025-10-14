@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.graphics.Rect
 import android.media.Image
 import android.util.Log
 import android.util.Size
@@ -12,7 +13,9 @@ import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -22,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -511,15 +515,11 @@ fun InvoiceScannerScreen(
                 }
             )
             
-            // Crop overlay
-            if (showCropOverlay && !processingImage && !captureInProgress && cropBox != null && previewSize.width > 0) {
-                CropOverlay(
-                    cropBox = cropBox!!,
-                    onCropBoxChange = { newBox -> cropBox = newBox },
-                    containerSize = previewSize,
-                    enabled = !processingImage && !captureInProgress
-                )
-            }
+            // Crop overlay - disabled for now
+            // if (showCropOverlay && !processingImage && !captureInProgress && cropBox != null && previewSize.width > 0) {
+            //     CropOverlay(...)
+            // }
+            
             
             // Top logo
             Row(
@@ -693,6 +693,69 @@ fun InvoiceScannerScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Data class fyrir crop box
+ */
+data class CropBox(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float
+) {
+    fun toRect(): Rect {
+        return Rect(left.toInt(), top.toInt(), right.toInt(), bottom.toInt())
+    }
+}
+
+/**
+ * Composable fyrir crop overlay
+ */
+@Composable
+fun CropOverlay(
+    cropBox: CropBox?,
+    modifier: Modifier = Modifier,
+    onCropChanged: (CropBox) -> Unit = {}
+) {
+    // Basic crop overlay implementation
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+    ) {
+        cropBox?.let { box ->
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokeWidth = 4.dp.toPx()
+                
+                // Draw crop rectangle
+                drawRect(
+                    color = Color.Green,
+                    topLeft = androidx.compose.ui.geometry.Offset(box.left, box.top),
+                    size = androidx.compose.ui.geometry.Size(
+                        box.right - box.left,
+                        box.bottom - box.top
+                    ),
+                    style = Stroke(width = strokeWidth)
+                )
+                
+                // Draw corner handles
+                val handleSize = 20.dp.toPx()
+                listOf(
+                    androidx.compose.ui.geometry.Offset(box.left, box.top),
+                    androidx.compose.ui.geometry.Offset(box.right, box.top),
+                    androidx.compose.ui.geometry.Offset(box.left, box.bottom),
+                    androidx.compose.ui.geometry.Offset(box.right, box.bottom)
+                ).forEach { corner ->
+                    drawCircle(
+                        color = Color.Green,
+                        radius = handleSize / 2,
+                        center = corner
+                    )
                 }
             }
         }
