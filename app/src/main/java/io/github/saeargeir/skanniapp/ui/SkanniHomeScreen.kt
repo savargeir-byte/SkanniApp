@@ -29,7 +29,11 @@ fun SkanniHomeScreen(
     onScan: () -> Unit,
     onBatchScan: () -> Unit = {},
     onSendExcel: () -> Unit,
-    onMenu: () -> Unit
+    onMenu: () -> Unit,
+    onLogout: () -> Unit = {},
+    // New callbacks
+    onExportCsv: () -> Unit = {},
+    onExportJson: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -117,36 +121,6 @@ fun SkanniHomeScreen(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White
-                        )
-                    }
-
-                    // Batch scan button - professional feature
-                    OutlinedButton(
-                        onClick = onBatchScan,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color(0xFF2E7D32)
-                        ),
-                        border = ButtonDefaults.outlinedButtonBorder.copy(
-                            brush = Brush.linearGradient(
-                                colors = listOf(Color(0xFF4CAF50), Color(0xFF2E7D32))
-                            )
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.CameraAlt, 
-                            contentDescription = null,
-                            tint = Color(0xFF2E7D32)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            "Fjöldaskanning (Pro)", 
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF2E7D32)
                         )
                     }
                 }
@@ -283,7 +257,7 @@ fun SkanniHomeScreen(
                 Text("Valmynd", fontSize = 16.sp)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(80.dp))
         }
     }
 }

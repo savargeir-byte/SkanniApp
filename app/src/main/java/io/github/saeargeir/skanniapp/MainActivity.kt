@@ -21,6 +21,7 @@ import io.github.saeargeir.skanniapp.ui.scanner.InvoiceScannerScreen
 import io.github.saeargeir.skanniapp.utils.CsvExporter
 import io.github.saeargeir.skanniapp.utils.IcelandicInvoiceParser
 import io.github.saeargeir.skanniapp.data.InvoiceStore
+import io.github.saeargeir.skanniapp.model.InvoiceRecord
 import java.time.LocalDate
 import java.util.*
 
@@ -134,7 +135,7 @@ class MainActivity : ComponentActivity() {
                 onScan = { showScanner = true },
                 onBatchScan = { showBatchScanner = true },
                 onSendExcel = {
-                    val csvFile = CsvExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.sendViaEmail(this@MainActivity, csvFile)
                 },
                 onMenu = { /* TODO: menu actions like sign out */ }
@@ -145,7 +146,7 @@ class MainActivity : ComponentActivity() {
                 onMonthChange = { selectedMonth = it },
                 onBack = { navScreen = "home" },
                 onExportCsv = {
-                    val csvFile = CsvExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
                 },
                 onSearchSeller = { /* TODO: implement search */ },
@@ -160,12 +161,20 @@ class MainActivity : ComponentActivity() {
                 onMonthChange = { selectedMonth = it },
                 onBack = { navScreen = "home" },
                 onExportCsv = {
-                    val csvFile = CsvExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
                 }
             )
             "form" -> io.github.saeargeir.skanniapp.ui.InvoiceFormScreen(
                 invoice = currentInvoice,
+                onSave = { updatedInvoice: InvoiceRecord ->
+                    // Save the updated invoice
+                    currentInvoice?.let { old ->
+                        invoiceStore.update(updatedInvoice.copy(id = old.id))
+                        notes = invoiceStore.loadAll()
+                    }
+                    navScreen = "notes"
+                },
                 onBack = { navScreen = "notes" },
                 onShare = { /* TODO: implement share */ },
                 onOpenImage = { /* TODO: implement open image */ },
@@ -183,11 +192,11 @@ class MainActivity : ComponentActivity() {
                     showAuth = true
                 },
                 onExportCsv = {
-                    val csvFile = CsvExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
                 },
                 onSendEmail = {
-                    val csvFile = CsvExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.sendViaEmail(this@MainActivity, csvFile)
                 }
             )
