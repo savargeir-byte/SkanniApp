@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +21,7 @@ import io.github.saeargeir.skanniapp.ui.theme.SkanniAppTheme
 import io.github.saeargeir.skanniapp.ui.scanner.InvoiceScannerScreen
 import io.github.saeargeir.skanniapp.utils.CsvExporter
 import io.github.saeargeir.skanniapp.utils.IcelandicInvoiceParser
+import io.github.saeargeir.skanniapp.utils.JsonExporter
 import io.github.saeargeir.skanniapp.data.InvoiceStore
 import io.github.saeargeir.skanniapp.model.InvoiceRecord
 import java.time.LocalDate
@@ -105,7 +107,7 @@ class MainActivity : ComponentActivity() {
         } else if (showScanner) {
             InvoiceScannerScreen(
                 onClose = { showScanner = false },
-                onTextDetected = { text ->
+                onResult = { text, imageUri ->
                     // Use improved Icelandic invoice parser
                     val parsed = IcelandicInvoiceParser.parseInvoiceText(text)
                     
@@ -116,7 +118,7 @@ class MainActivity : ComponentActivity() {
                         vendor = parsed.vendor,
                         amount = parsed.amount,
                         vat = parsed.vat,
-                        imagePath = "",
+                        imagePath = imageUri?.toString() ?: "",
                         invoiceNumber = parsed.invoiceNumber,
                         ocrText = text,
                         classificationConfidence = parsed.confidence.toDouble()
@@ -125,7 +127,14 @@ class MainActivity : ComponentActivity() {
                     addNote(invoice)
                     ocrText = text
                     showScanner = false
-                    navScreen = "form"
+                    
+                    // Show success message with parsed information
+                    val vendorText = if (parsed.vendor.isNotBlank()) parsed.vendor else "Óþekktur seljandi"
+                    val amountText = if (parsed.amount > 0) "${parsed.amount} kr" else "Óþekkt upphæð"
+                    Toast.makeText(this@MainActivity, "Reikningur skráður: $vendorText - $amountText", Toast.LENGTH_LONG).show()
+                    
+                    // Go back to notes screen to see the new invoice
+                    navScreen = "notes"
                 }
             )
         } else when (navScreen) {
@@ -138,7 +147,22 @@ class MainActivity : ComponentActivity() {
                     val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.sendViaEmail(this@MainActivity, csvFile)
                 },
-                onMenu = { /* TODO: menu actions like sign out */ }
+                onMenu = { /* TODO: menu actions like sign out */ },
+                onLogout = { 
+                    // Clear all data and go back to login/home
+                    updateNotes(emptyList())
+                    navScreen = "home"
+                    // You can add authentication logout logic here
+                    auth?.signOut()
+                },
+                onExportCsv = {
+                    val csvFile = CsvExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
+                },
+                onExportJson = {
+                    val jsonFile = JsonExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    if (jsonFile != null) JsonExporter.share(this@MainActivity, jsonFile)
+                }
             )
             "notes" -> io.github.saeargeir.skanniapp.ui.NoteListScreen(
                 notes = notes.filter { it.date.startsWith(selectedMonth.toString()) },
@@ -153,7 +177,66 @@ class MainActivity : ComponentActivity() {
                 onSortBy = { /* TODO: implement sort */ },
                 onNoteClick = { invoice -> currentInvoice = invoice; navScreen = "form" },
                 onOverview = { navScreen = "overview" },
-                onNotes = { navScreen = "notes" }
+                onNotes = { navScreen = "notes" },
+                onExportJson = {
+                    val jsonFile = JsonExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    if (jsonFile != null) JsonExporter.share(this@MainActivity, jsonFile)
+                },
+                onOpenImage = {
+                    // If there's a current invoice, show its image
+                    if (currentInvoice != null) {
+                        val path = currentInvoice?.imagePath
+                        if (!path.isNullOrBlank()) {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                    setDataAndType(android.net.Uri.parse(path), "image/*")
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(this@MainActivity, "Gat ekki opnað mynd: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "Engin mynd tengd við þessa færslu", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        // If no invoice selected, take a new picture
+                        showScanner = true
+                    }
+                },
+                onShare = {
+                    val inv = currentInvoice
+                    if (inv != null) {
+                        val title = (inv.vendor.ifBlank { "Reikningur" }) + " - " + inv.date
+                        val text = inv.ocrText ?: ("Seljandi: ${inv.vendor}\nUpphæð: ${inv.amount} kr\nVSK: ${inv.vat}\nNr: ${inv.invoiceNumber ?: ""}")
+                        val pdfUri = io.github.saeargeir.skanniapp.utils.PdfUtils.saveTextAsPdf(this@MainActivity, title, text)
+                        if (pdfUri != null) {
+                            try {
+                                val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, pdfUri)
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                startActivity(android.content.Intent.createChooser(share, "Deila PDF"))
+                            } catch (e: Exception) {
+                                Toast.makeText(this@MainActivity, "Gat ekki deilt PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "Gat ekki vistað PDF", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(this@MainActivity, "Engin nóta valin", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDelete = {
+                    currentInvoice?.let { invoice ->
+                        deleteNote(invoice.id)
+                    }
+                },
+                onSignOut = {
+                    auth?.signOut()
+                    showAuth = true
+                }
             )
             "overview" -> io.github.saeargeir.skanniapp.ui.OverviewScreen(
                 notes = notes,
@@ -163,6 +246,10 @@ class MainActivity : ComponentActivity() {
                 onExportCsv = {
                     val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
+                },
+                onExportJson = {
+                    val jsonFile = JsonExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    if (jsonFile != null) JsonExporter.share(this@MainActivity, jsonFile)
                 }
             )
             "form" -> io.github.saeargeir.skanniapp.ui.InvoiceFormScreen(
@@ -176,8 +263,44 @@ class MainActivity : ComponentActivity() {
                     navScreen = "notes"
                 },
                 onBack = { navScreen = "notes" },
-                onShare = { /* TODO: implement share */ },
-                onOpenImage = { /* TODO: implement open image */ },
+                onShare = {
+                    val inv = currentInvoice
+                    if (inv != null) {
+                        val title = (inv.vendor.ifBlank { "Reikningur" }) + " - " + inv.date
+                        val text = inv.ocrText ?: ("Seljandi: ${inv.vendor}\nUpphæð: ${inv.amount} kr\nVSK: ${inv.vat}\nNr: ${inv.invoiceNumber ?: ""}")
+                        val pdfUri = io.github.saeargeir.skanniapp.utils.PdfUtils.saveTextAsPdf(this@MainActivity, title, text)
+                        if (pdfUri != null) {
+                            try {
+                                val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, pdfUri)
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                startActivity(android.content.Intent.createChooser(share, "Deila PDF"))
+                            } catch (e: Exception) {
+                                Toast.makeText(this@MainActivity, "Gat ekki deilt PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "Gat ekki vistað PDF", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onOpenImage = {
+                    val path = currentInvoice?.imagePath
+                    if (!path.isNullOrBlank()) {
+                        try {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                setDataAndType(android.net.Uri.parse(path), "image/*")
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(this@MainActivity, "Gat ekki opnað mynd: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(this@MainActivity, "Engin mynd tengd við þessa færslu", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onDelete = {
                     currentInvoice?.let { invoice ->
                         deleteNote(invoice.id)
@@ -198,6 +321,10 @@ class MainActivity : ComponentActivity() {
                 onSendEmail = {
                     val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.sendViaEmail(this@MainActivity, csvFile)
+                },
+                onExportJson = {
+                    val jsonFile = JsonExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                    if (jsonFile != null) JsonExporter.share(this@MainActivity, jsonFile)
                 }
             )
             "batch_management" -> {
@@ -261,7 +388,7 @@ class MainActivity : ComponentActivity() {
                     title = { Text("SkanniApp") },
                     actions = {
                         IconButton(onClick = onSignOut) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Sign Out")
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sign Out")
                         }
                     }
                 )
