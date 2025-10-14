@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -19,11 +20,16 @@ import io.github.saeargeir.skanniapp.firebase.FirebaseAuthService
 import io.github.saeargeir.skanniapp.ui.auth.AuthScreen
 import io.github.saeargeir.skanniapp.ui.theme.SkanniAppTheme
 import io.github.saeargeir.skanniapp.ui.scanner.InvoiceScannerScreen
+import io.github.saeargeir.skanniapp.ui.scanner.EnhancedInvoiceScannerScreen
+import io.github.saeargeir.skanniapp.ui.settings.SettingsScreen
 import io.github.saeargeir.skanniapp.utils.CsvExporter
 import io.github.saeargeir.skanniapp.utils.IcelandicInvoiceParser
 import io.github.saeargeir.skanniapp.utils.JsonExporter
 import io.github.saeargeir.skanniapp.data.InvoiceStore
 import io.github.saeargeir.skanniapp.model.InvoiceRecord
+import io.github.saeargeir.skanniapp.ocr.AdvancedOcrProcessor
+import io.github.saeargeir.skanniapp.feedback.UserFeedbackManager
+import io.github.saeargeir.skanniapp.firebase.FirebaseDataService
 import java.time.LocalDate
 import java.util.*
 
@@ -31,6 +37,9 @@ class MainActivity : ComponentActivity() {
     private var auth: FirebaseAuth? = null
     private lateinit var authService: FirebaseAuthService
     private lateinit var invoiceStore: InvoiceStore
+    private lateinit var firebaseDataService: FirebaseDataService
+    private lateinit var advancedOcrProcessor: AdvancedOcrProcessor
+    private lateinit var userFeedbackManager: UserFeedbackManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +50,11 @@ class MainActivity : ComponentActivity() {
         
         // Initialize InvoiceStore for persistent data
         invoiceStore = InvoiceStore(this)
+        
+        // Initialize enhanced services
+        firebaseDataService = FirebaseDataService()
+        advancedOcrProcessor = AdvancedOcrProcessor(this)
+        userFeedbackManager = UserFeedbackManager(this)
         
         setContent {
             SkanniAppTheme {
@@ -105,7 +119,25 @@ class MainActivity : ComponentActivity() {
                 onClose = { showBatchScanner = false }
             )
         } else if (showScanner) {
-            InvoiceScannerScreen(
+            EnhancedInvoiceScannerScreen(
+                onInvoiceScanned = { scannedInvoice ->
+                    // Apply learned corrections
+                    lifecycleScope.launch {
+                        val correctedInvoice = userFeedbackManager.applyLearnedCorrections(scannedInvoice)
+                        
+                        // Save to local storage
+                        addNote(correctedInvoice)
+                        
+                        // Sync to cloud if user is authenticated
+                        if (auth?.currentUser != null) {
+                            firebaseDataService.saveInvoice(correctedInvoice)
+                        }
+                        
+                        currentInvoice = correctedInvoice
+                        showScanner = false
+                        navScreen = "form"
+                    }
+                },
                 onClose = { showScanner = false },
                 onResult = { text, imageUri ->
                     // Use improved Icelandic invoice parser
@@ -147,7 +179,7 @@ class MainActivity : ComponentActivity() {
                     val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                     if (csvFile != null) CsvExporter.sendViaEmail(this@MainActivity, csvFile)
                 },
-                onMenu = { /* TODO: menu actions like sign out */ },
+                onMenu = { navScreen = "settings" },
                 onLogout = { 
                     // Clear all data and go back to login/home
                     updateNotes(emptyList())
@@ -156,12 +188,31 @@ class MainActivity : ComponentActivity() {
                     auth?.signOut()
                 },
                 onExportCsv = {
-                    val csvFile = CsvExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
-                    if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
+                    // Sync with cloud before export
+                    lifecycleScope.launch {
+                        if (auth?.currentUser != null) {
+                            firebaseDataService.syncData(notes).onSuccess { syncResult ->
+                                notes = invoiceStore.loadAll() + syncResult.downloaded
+                                updateNotes(notes)
+                            }
+                        }
+                        
+                        val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                        if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
+                    }
                 },
                 onExportJson = {
-                    val jsonFile = JsonExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
-                    if (jsonFile != null) JsonExporter.share(this@MainActivity, jsonFile)
+                    lifecycleScope.launch {
+                        if (auth?.currentUser != null) {
+                            firebaseDataService.syncData(notes).onSuccess { syncResult ->
+                                notes = invoiceStore.loadAll() + syncResult.downloaded
+                                updateNotes(notes)
+                            }
+                        }
+                        
+                        val jsonFile = JsonExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
+                        if (jsonFile != null) JsonExporter.share(this@MainActivity, jsonFile)
+                    }
                 }
             )
             "notes" -> io.github.saeargeir.skanniapp.ui.NoteListScreen(
@@ -362,6 +413,62 @@ class MainActivity : ComponentActivity() {
                     navScreen = "home"
                 }
             }
+            "settings" -> SettingsScreen(
+                onNavigateBack = { navScreen = "home" },
+                onCloudSync = {
+                    lifecycleScope.launch {
+                        if (auth?.currentUser != null) {
+                            firebaseDataService.syncData(notes).onSuccess { syncResult ->
+                                notes = invoiceStore.loadAll() + syncResult.downloaded
+                                updateNotes(notes)
+                                Toast.makeText(this@MainActivity, 
+                                    "Samstillt: ${syncResult.uploaded} upp, ${syncResult.downloaded.size} niður", 
+                                    Toast.LENGTH_SHORT).show()
+                            }.onFailure { error ->
+                                Toast.makeText(this@MainActivity, 
+                                    "Villa við samstillingu: ${error.message}", 
+                                    Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "Ekki tengt við cloud", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onBackup = {
+                    lifecycleScope.launch {
+                        if (auth?.currentUser != null) {
+                            firebaseDataService.createBackup(notes).onSuccess {
+                                Toast.makeText(this@MainActivity, "Öryggisafrit búið til", Toast.LENGTH_SHORT).show()
+                            }.onFailure { error ->
+                                Toast.makeText(this@MainActivity, 
+                                    "Villa við öryggisafrit: ${error.message}", 
+                                    Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "Ekki tengt við cloud", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                syncStatus = if (auth?.currentUser != null) "Tengt við cloud (${auth?.currentUser?.email})" else "Ekki tengt við cloud",
+                onExportSettings = {
+                    Toast.makeText(this@MainActivity, "Útflutningur stillinga ekki ennþá útfærður", Toast.LENGTH_SHORT).show()
+                },
+                onImportSettings = {
+                    Toast.makeText(this@MainActivity, "Innflutningur stillinga ekki ennþá útfærður", Toast.LENGTH_SHORT).show()
+                },
+                onClearCache = {
+                    // Clear cache and temp files
+                    cacheDir.listFiles()?.forEach { file ->
+                        if (file.name.startsWith("temp_") || file.name.endsWith(".tmp")) {
+                            file.delete()
+                        }
+                    }
+                    Toast.makeText(this@MainActivity, "Skyndiminni hreinsað", Toast.LENGTH_SHORT).show()
+                },
+                onAbout = {
+                    Toast.makeText(this@MainActivity, "SkanniApp v1.0.31 - Advanced OCR með AI lærdómi", Toast.LENGTH_LONG).show()
+                }
+            )
         }
 
         if (ocrText != null) {
