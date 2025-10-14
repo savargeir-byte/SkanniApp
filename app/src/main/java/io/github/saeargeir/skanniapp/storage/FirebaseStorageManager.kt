@@ -1,3 +1,4 @@
+
 package io.github.saeargeir.skanniapp.storage
 
 import android.content.Context

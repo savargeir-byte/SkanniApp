@@ -186,13 +186,18 @@ object IcelandicInvoiceParser {
     }
     
     private fun findVendor(lines: List<String>): String {
+        Log.d(TAG, "🏪 Finding vendor from ${lines.size} lines")
+        Log.d(TAG, "   First few lines: ${lines.take(5).joinToString(" | ")}")
+        
         // Check first few lines for known vendors
-        for (line in lines.take(8)) {
+        for ((index, line) in lines.take(8).withIndex()) {
             val cleanLine = line.trim().lowercase()
+            Log.v(TAG, "   Line $index: '$cleanLine'")
             
             // Exact matches first
             for (vendor in icelandicVendors) {
                 if (cleanLine.contains(vendor.lowercase())) {
+                    Log.d(TAG, "   ✅ Vendor found: '$vendor' in line $index")
                     return vendor
                 }
             }
@@ -244,46 +249,66 @@ object IcelandicInvoiceParser {
         val amounts = mutableListOf<Pair<Double, String>>()
         
         // First try the regex patterns
+        Log.d(TAG, "🔍 Trying ${amountPatterns.size} amount patterns...")
         for ((index, pattern) in amountPatterns.withIndex()) {
             val matcher = pattern.matcher(text)
             if (matcher.find()) {
                 val amountStr = matcher.group(1)
                 if (amountStr != null) {
-                    Log.d(TAG, "Pattern $index matched: '$amountStr' (pattern: ${pattern.pattern()})")
+                    Log.d(TAG, "   Pattern $index MATCHED: '$amountStr' (pattern: ${pattern.pattern()})")
                     val parsed = parseIcelandicNumber(amountStr)
                     if (parsed != null && parsed > 0) {
-                        Log.d(TAG, "  -> Parsed as: $parsed kr")
+                        Log.d(TAG, "     ✅ Parsed as: $parsed kr")
                         amounts.add(Pair(parsed, amountStr))
                     } else {
-                        Log.d(TAG, "  -> Failed to parse or invalid")
+                        Log.d(TAG, "     ❌ Failed to parse or invalid: $parsed")
                     }
+                } else {
+                    Log.d(TAG, "   Pattern $index matched but no group: ${pattern.pattern()}")
                 }
+            } else {
+                Log.v(TAG, "   Pattern $index no match: ${pattern.pattern()}")
             }
         }
         
         // ADDITIONAL LOGIC: Look for standalone amounts on lines (common in Icelandic receipts)
+        Log.d(TAG, "🔍 Looking for standalone amounts in ${lines.size} lines...")
         val lines = text.split("\\n").map { it.trim() }
         for ((lineIndex, line) in lines.withIndex()) {
+            Log.v(TAG, "   Line $lineIndex: '$line'")
+            
             // Look for lines that are likely total amounts
             if (line.matches(Regex("^\\s*[0-9]{1,3}\\.[0-9]{3}\\s*$")) || 
                 line.matches(Regex("^\\s*[0-9]{1,2},[0-9]{3}\\s*$")) ||
                 line.matches(Regex("^\\s*[0-9]{4,6}\\s*$"))) {
                 
+                Log.d(TAG, "   Line $lineIndex looks like amount: '$line'")
+                
                 // Check if this line is near "Samtals" or similar
                 val contextLines = (maxOf(0, lineIndex-2)..minOf(lines.size-1, lineIndex+2))
+                val contextText = contextLines.map { i -> "$i:${lines[i]}" }.joinToString(" | ")
+                Log.d(TAG, "   Context: $contextText")
+                
                 val hasContext = contextLines.any { i -> 
-                    lines[i].contains("samtals", ignoreCase = true) ||
-                    lines[i].contains("alls", ignoreCase = true) ||
-                    lines[i].contains("total", ignoreCase = true) ||
-                    lines[i].contains("greiðsla", ignoreCase = true)
+                    val contextLine = lines[i].lowercase()
+                    contextLine.contains("samtals") ||
+                    contextLine.contains("alls") ||
+                    contextLine.contains("total") ||
+                    contextLine.contains("greiðsla")
                 }
+                
+                Log.d(TAG, "   Has total context: $hasContext")
                 
                 if (hasContext) {
                     val parsed = parseIcelandicNumber(line)
                     if (parsed != null && parsed > 0) {
-                        Log.d(TAG, "Standalone amount found near total context: '$line' -> $parsed kr")
+                        Log.d(TAG, "   ✅ Standalone amount: '$line' -> $parsed kr")
                         amounts.add(Pair(parsed, line))
+                    } else {
+                        Log.d(TAG, "   ❌ Failed to parse standalone amount: '$line'")
                     }
+                } else {
+                    Log.d(TAG, "   ⚠️ No context for potential amount: '$line'")
                 }
             }
         }
@@ -322,6 +347,7 @@ object IcelandicInvoiceParser {
             val spaceCount = cleaned.count { it == ' ' }
             
             Log.v(TAG, "  Separators - commas: $commaCount, dots: $dotCount, spaces: $spaceCount")
+            Log.d(TAG, "🔢 Parsing '$cleaned' -> separators(c:$commaCount d:$dotCount s:$spaceCount)")
             
             // Remove all spaces first
             val noSpaces = cleaned.replace(" ", "")

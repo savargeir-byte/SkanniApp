@@ -154,7 +154,8 @@ fun SkanniHomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .responsivePadding(),
+                    .responsivePadding()
+                    .padding(bottom = 140.dp), // Increased padding even more for navigation bar
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // App logo and intro with animation
@@ -354,7 +355,7 @@ fun SkanniHomeScreen(
                 Text("Valmynd", fontSize = 16.sp)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(48.dp))
         }
         
         // Floating action menu for export functions

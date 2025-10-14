@@ -58,6 +58,7 @@ fun NoteListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF5F5F5))
+                .padding(bottom = 120.dp) // Add padding for navigation bar
         ) {
             // Header - sama og InvoiceFormScreen
             Box(
