@@ -291,7 +291,7 @@ fun SkanniHomeScreen(
                             Text("Yfirlit", fontSize = 14.sp)
                         }
 
-                        // Notes button
+                        // View invoices button
                         OutlinedButton(
                             onClick = onNotes,
                             modifier = Modifier
@@ -303,12 +303,12 @@ fun SkanniHomeScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.Note,
+                                Icons.Default.Receipt,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Mínir", fontSize = 14.sp)
+                            Text("Skoða", fontSize = 14.sp)
                         }
                     }
 
