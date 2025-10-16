@@ -34,11 +34,21 @@ fun SkanniHomeScreen(
     onLogout: () -> Unit = {},
     // New callbacks
     onExportCsv: () -> Unit = {},
-    onExportJson: () -> Unit = {}
+    onExportJson: () -> Unit = {},
+    // Auto scan trigger
+    autoStartScan: Boolean = false
 ) {
     // Settings menu state
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showFloatingMenu by remember { mutableStateOf(false) }
+    
+    // Sjálfvirkt skann þegar komið til baka
+    LaunchedEffect(autoStartScan) {
+        if (autoStartScan) {
+            kotlinx.coroutines.delay(500) // Stutta bið til að forsíða hleðst
+            onScan() // Byrja sjálfkrafa skann
+        }
+    }
     
     Box(
         modifier = Modifier

@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
         var navScreen by remember { mutableStateOf("home") }
         var showScanner by remember { mutableStateOf(false) }
         var showBatchScanner by remember { mutableStateOf(false) }
+        var autoStartScan by remember { mutableStateOf(false) }  // Nýtt fyrir sjálfvirkt skann
         var ocrText by remember { mutableStateOf<String?>(null) }
         var currentInvoice by remember { mutableStateOf<io.github.saeargeir.skanniapp.model.InvoiceRecord?>(null) }
         var selectedMonth by remember { mutableStateOf(java.time.YearMonth.now()) }
@@ -122,7 +123,7 @@ class MainActivity : ComponentActivity() {
             EnhancedInvoiceScannerScreen(
                 onClose = { showScanner = false },
                 onResult = { scannedText, imageUri ->
-                    // Process the scanned text
+                    // Vista reikninginn í bakgrunni
                     lifecycleScope.launch {
                         val parsedInvoice = IcelandicInvoiceParser.parseInvoiceText(scannedText)
                         val invoice = InvoiceRecord(
@@ -148,9 +149,10 @@ class MainActivity : ComponentActivity() {
                             firebaseDataService.saveInvoice(correctedInvoice)
                         }
                         
-                        currentInvoice = correctedInvoice
+                        // Fara á forsíðu með sjálfvirku skanni
                         showScanner = false
-                        navScreen = "form"
+                        navScreen = "home"
+                        autoStartScan = true  // Byrja sjálfkrafa næsta skann
                     }
                 }
             )
@@ -158,7 +160,10 @@ class MainActivity : ComponentActivity() {
             "home" -> io.github.saeargeir.skanniapp.ui.SkanniHomeScreen(
                 onOverview = { navScreen = "overview" },
                 onNotes = { navScreen = "notes" },
-                onScan = { showScanner = true },
+                onScan = { 
+                    showScanner = true
+                    autoStartScan = false  // Reset eftir að skann byrjar
+                },
                 onBatchScan = { showBatchScanner = true },
                 onSendExcel = {
                     val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
@@ -172,6 +177,7 @@ class MainActivity : ComponentActivity() {
                     // You can add authentication logout logic here
                     auth?.signOut()
                 },
+                autoStartScan = autoStartScan,  // Pass sjálfvirka skann stöðu
                 onExportCsv = {
                     // Sync with cloud before export
                     lifecycleScope.launch {
