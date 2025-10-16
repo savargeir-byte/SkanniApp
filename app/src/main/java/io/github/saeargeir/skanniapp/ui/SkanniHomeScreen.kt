@@ -3,6 +3,7 @@ package io.github.saeargeir.skanniapp.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
@@ -42,11 +43,36 @@ fun SkanniHomeScreen(
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showFloatingMenu by remember { mutableStateOf(false) }
     
-    // Sjálfvirkt skann þegar komið til baka
+    // Background processing state
+    var isBackgroundProcessing by remember { mutableStateOf(false) }
+    var backgroundProcessingStage by remember { mutableStateOf("") }
+    var showProcessingSuccess by remember { mutableStateOf(false) }
+    
+    // Simulation of background processing when returning from camera
     LaunchedEffect(autoStartScan) {
         if (autoStartScan) {
-            kotlinx.coroutines.delay(500) // Stutta bið til að forsíða hleðst
-            onScan() // Byrja sjálfkrafa skann
+            // Start background processing simulation
+            isBackgroundProcessing = true
+            backgroundProcessingStage = "Læsir texta úr mynd..."
+            
+            // Simulate OCR processing time
+            kotlinx.coroutines.delay(2000)
+            backgroundProcessingStage = "Vistar í skýið..."
+            
+            kotlinx.coroutines.delay(1500)
+            backgroundProcessingStage = "Vistar reikninginn..."
+            
+            kotlinx.coroutines.delay(1000)
+            
+            // Show success indicator
+            isBackgroundProcessing = false
+            showProcessingSuccess = true
+            backgroundProcessingStage = "✅ Afgreitt!"
+            
+            // Hide success after 2 seconds and start new scan
+            kotlinx.coroutines.delay(2000)
+            showProcessingSuccess = false
+            onScan() // Byrja næsta skann
         }
     }
     
@@ -378,6 +404,76 @@ fun SkanniHomeScreen(
                 .padding(16.dp)
         ) {
             Icon(Icons.Default.Menu, contentDescription = "Menu")
+        }
+        
+        // Background processing indicator overlay
+        if (isBackgroundProcessing || showProcessingSuccess) {
+            BackgroundProcessingIndicator(
+                isProcessing = isBackgroundProcessing,
+                isSuccess = showProcessingSuccess,
+                stage = backgroundProcessingStage,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BackgroundProcessingIndicator(
+    isProcessing: Boolean,
+    isSuccess: Boolean,
+    stage: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                isSuccess -> Color(0xFF4CAF50).copy(alpha = 0.95f) // Grænn fyrir success
+                isProcessing -> Color.Black.copy(alpha = 0.85f) // Svartur fyrir processing
+                else -> Color.Transparent
+            }
+        ),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isSuccess) {
+                // Grænn hringur með checkmark
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color.White, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Afgreitt",
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+            } else if (isProcessing) {
+                // Spinning indicator fyrir processing
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = Color.White,
+                    strokeWidth = 3.dp
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+            
+            Text(
+                text = stage,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
