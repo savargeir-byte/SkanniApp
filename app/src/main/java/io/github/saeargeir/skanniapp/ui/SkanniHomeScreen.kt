@@ -69,10 +69,10 @@ fun SkanniHomeScreen(
             showProcessingSuccess = true
             backgroundProcessingStage = "✅ Afgreitt!"
             
-            // Hide success after 2 seconds and start new scan
+            // Hide success after 2 seconds - EKKI byrja aftur sjálfkrafa
             kotlinx.coroutines.delay(2000)
             showProcessingSuccess = false
-            onScan() // Byrja næsta skann
+            // Fjarlægt: onScan() - Byrjar EKKI næsta skann sjálfkrafa
         }
     }
     

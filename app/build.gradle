@@ -112,6 +112,9 @@ dependencies {
     // DataStore for preferences
     implementation 'androidx.datastore:datastore-preferences:1.0.0'
     
+    // Security for encrypted storage
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    
     // Timber for better logging
     implementation 'com.jakewharton.timber:timber:5.0.1'
     
