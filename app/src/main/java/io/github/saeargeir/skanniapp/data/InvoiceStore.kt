@@ -77,6 +77,12 @@ class InvoiceStore(private val context: Context) {
         put("vat", r.vat)
         put("imagePath", r.imagePath)
         if (r.invoiceNumber != null) put("invoiceNumber", r.invoiceNumber)
+        if (r.categoryId != null) put("categoryId", r.categoryId)
+        if (r.ocrText != null) put("ocrText", r.ocrText)
+        put("isManuallyClassified", r.isManuallyClassified)
+        put("classificationConfidence", r.classificationConfidence)
+        if (r.cloudImageUrl != null) put("cloudImageUrl", r.cloudImageUrl)
+        put("cloudSyncStatus", r.cloudSyncStatus.name)
     }
 
     private fun fromJson(o: JSONObject): InvoiceRecord = InvoiceRecord(
@@ -88,6 +94,18 @@ class InvoiceStore(private val context: Context) {
         vat = o.getDouble("vat"),
         imagePath = o.getString("imagePath"),
         // org.json's optString(name, fallback) requires a non-null fallback; use empty string and map to null
-        invoiceNumber = o.optString("invoiceNumber", "").takeIf { it.isNotEmpty() }
+        invoiceNumber = o.optString("invoiceNumber", "").takeIf { it.isNotEmpty() },
+        categoryId = o.optString("categoryId", "").takeIf { it.isNotEmpty() },
+        ocrText = o.optString("ocrText", "").takeIf { it.isNotEmpty() },
+        isManuallyClassified = o.optBoolean("isManuallyClassified", false),
+        classificationConfidence = o.optDouble("classificationConfidence", 0.0),
+        cloudImageUrl = o.optString("cloudImageUrl", "").takeIf { it.isNotEmpty() },
+        cloudSyncStatus = try {
+            io.github.saeargeir.skanniapp.model.CloudSyncStatus.valueOf(
+                o.optString("cloudSyncStatus", "NOT_SYNCED")
+            )
+        } catch (e: Exception) {
+            io.github.saeargeir.skanniapp.model.CloudSyncStatus.NOT_SYNCED
+        }
     )
 }

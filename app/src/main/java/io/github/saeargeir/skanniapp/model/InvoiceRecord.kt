@@ -12,5 +12,14 @@ data class InvoiceRecord(
     val categoryId: String? = null,  // Smart categorization
     val ocrText: String? = null,     // Full OCR text for ML analysis
     val isManuallyClassified: Boolean = false,  // User manually changed category
-    val classificationConfidence: Double = 0.0  // ML confidence score
+    val classificationConfidence: Double = 0.0,  // ML confidence score
+    val cloudImageUrl: String? = null,  // Firebase Storage download URL
+    val cloudSyncStatus: CloudSyncStatus = CloudSyncStatus.NOT_SYNCED  // Sync status
 )
+
+enum class CloudSyncStatus {
+    NOT_SYNCED,     // Local only, not uploaded to cloud
+    SYNCING,        // Upload in progress
+    SYNCED,         // Successfully uploaded and synced
+    SYNC_FAILED     // Upload failed, will retry
+}
