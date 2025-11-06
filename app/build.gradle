@@ -22,8 +22,8 @@ android {
     applicationId 'is.iceveflausnir.skanniapp'
         minSdk 26
     targetSdk 35
-    versionCode 239
-    versionName "2.0.37"
+    versionCode 241
+    versionName "2.0.39"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -106,6 +106,7 @@ dependencies {
     implementation 'com.google.firebase:firebase-analytics-ktx'
     implementation 'com.google.firebase:firebase-storage-ktx'
     implementation 'com.google.firebase:firebase-firestore-ktx'
+    implementation 'com.google.firebase:firebase-messaging-ktx'
     
     // Google Sign-In
     implementation 'com.google.android.gms:play-services-auth:21.0.0'

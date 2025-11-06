@@ -2,10 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
@@ -14,14 +17,14 @@
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
     <!-- Privacy policy: https://saeargeir.github.io/SkanniApp/privacy-policy.html -->
 
-        <application
-        android:name=".SkanniApplication"
+    <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+        
         <!-- Splash Activity as launcher -->
         <activity
             android:name="io.github.saeargeir.skanniapp.SplashActivity"
@@ -37,13 +40,36 @@
         <!-- Main Activity -->
         <activity
             android:name="io.github.saeargeir.skanniapp.MainActivity"
-            android:exported="false"
+            android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.MyApplication" />
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="skanniapp" android:host="invoice" android:pathPrefix="/" />
+                <data android:scheme="https" android:host="skanniapp.is" android:pathPrefix="/invoice" />
+            </intent-filter>
+        </activity>
+
+        <!-- Firebase Messaging Service -->
+        <service
+            android:name="io.github.saeargeir.skanniapp.service.MyFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Firebase notification metadata -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="skanni_channel" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
-                android:authorities="${applicationId}.fileprovider"
+            android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
@@ -55,6 +81,11 @@
         <meta-data
             android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT"
             android:value="true" />
+        
+        <!-- AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-1625281157866154~1316263355" />
         
     </application>
 
