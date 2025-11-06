@@ -1,13 +1,25 @@
 package io.github.saeargeir.skanniapp.data
 
 import android.content.Context
+import android.net.Uri
+import android.util.Log
 import io.github.saeargeir.skanniapp.model.InvoiceRecord
+import io.github.saeargeir.skanniapp.model.CloudSyncStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
+/**
+ * InvoiceStore with Firebase sync
+ * Stores data locally AND syncs to Firebase
+ */
 class InvoiceStore(private val context: Context) {
     private val file: File by lazy { File(context.filesDir, "invoices.json") }
+    private val firebaseRepo = FirebaseRepository()
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     fun loadAll(): List<InvoiceRecord> {
         if (!file.exists()) return emptyList()
@@ -26,16 +38,54 @@ class InvoiceStore(private val context: Context) {
         file.writeText(arr.toString())
     }
 
-    fun add(record: InvoiceRecord) {
+    fun add(record: InvoiceRecord, imageUri: Uri? = null) {
+        // Save locally first
         val current = loadAll().toMutableList()
         current.add(record)
         saveAll(current)
+        
+        // Sync to Firebase in background
+        if (firebaseRepo.isAuthenticated()) {
+            scope.launch {
+                try {
+                    Log.d("InvoiceStore", "Syncing invoice to Firebase...")
+                    val result = firebaseRepo.uploadInvoice(record, imageUri)
+                    
+                    result.onSuccess { firestoreId ->
+                        Log.d("InvoiceStore", "✅ Synced to Firebase: $firestoreId")
+                        // Update local record with Firestore ID
+                        val updated = record.copy(
+                            firestoreId = firestoreId,
+                            cloudSyncStatus = CloudSyncStatus.SYNCED
+                        )
+                        update(updated)
+                    }
+                    
+                    result.onFailure { error ->
+                        Log.e("InvoiceStore", "❌ Failed to sync to Firebase", error)
+                        // Mark as failed
+                        val updated = record.copy(cloudSyncStatus = CloudSyncStatus.SYNC_FAILED)
+                        update(updated)
+                    }
+                } catch (e: Exception) {
+                    Log.e("InvoiceStore", "❌ Error during Firebase sync", e)
+                }
+            }
+        }
     }
 
     fun deleteById(id: Long) {
         val current = loadAll().toMutableList()
+        val record = current.find { it.id == id }
         val newList = current.filterNot { it.id == id }
         saveAll(newList)
+        
+        // Delete from Firebase if it was synced
+        if (record?.firestoreId != null && firebaseRepo.isAuthenticated()) {
+            scope.launch {
+                firebaseRepo.deleteInvoice(record.firestoreId)
+            }
+        }
     }
 
     fun update(record: InvoiceRecord) {
@@ -44,6 +94,13 @@ class InvoiceStore(private val context: Context) {
         if (idx >= 0) {
             current[idx] = record
             saveAll(current)
+            
+            // Update Firebase if synced
+            if (record.firestoreId != null && firebaseRepo.isAuthenticated()) {
+                scope.launch {
+                    firebaseRepo.updateInvoice(record)
+                }
+            }
         }
     }
     
@@ -71,11 +128,10 @@ class InvoiceStore(private val context: Context) {
     private fun toJson(r: InvoiceRecord): JSONObject = JSONObject().apply {
         put("id", r.id)
         put("date", r.date)
-        put("monthKey", r.monthKey)
-        put("vendor", r.vendor)
+        put("vendorName", r.vendorName ?: "")
         put("amount", r.amount)
         put("vat", r.vat)
-        put("imagePath", r.imagePath)
+        put("imagePath", r.imagePath ?: "")
         if (r.invoiceNumber != null) put("invoiceNumber", r.invoiceNumber)
         if (r.categoryId != null) put("categoryId", r.categoryId)
         if (r.ocrText != null) put("ocrText", r.ocrText)
@@ -83,17 +139,16 @@ class InvoiceStore(private val context: Context) {
         put("classificationConfidence", r.classificationConfidence)
         if (r.cloudImageUrl != null) put("cloudImageUrl", r.cloudImageUrl)
         put("cloudSyncStatus", r.cloudSyncStatus.name)
+        if (r.firestoreId != null) put("firestoreId", r.firestoreId)
     }
 
     private fun fromJson(o: JSONObject): InvoiceRecord = InvoiceRecord(
         id = o.getLong("id"),
-        date = o.getString("date"),
-        monthKey = o.getString("monthKey"),
-        vendor = o.getString("vendor"),
+        date = o.getLong("date"),
+        vendorName = o.optString("vendorName", "").takeIf { it.isNotEmpty() },
         amount = o.getDouble("amount"),
         vat = o.getDouble("vat"),
-        imagePath = o.getString("imagePath"),
-        // org.json's optString(name, fallback) requires a non-null fallback; use empty string and map to null
+        imagePath = o.optString("imagePath", "").takeIf { it.isNotEmpty() },
         invoiceNumber = o.optString("invoiceNumber", "").takeIf { it.isNotEmpty() },
         categoryId = o.optString("categoryId", "").takeIf { it.isNotEmpty() },
         ocrText = o.optString("ocrText", "").takeIf { it.isNotEmpty() },
@@ -101,11 +156,10 @@ class InvoiceStore(private val context: Context) {
         classificationConfidence = o.optDouble("classificationConfidence", 0.0),
         cloudImageUrl = o.optString("cloudImageUrl", "").takeIf { it.isNotEmpty() },
         cloudSyncStatus = try {
-            io.github.saeargeir.skanniapp.model.CloudSyncStatus.valueOf(
-                o.optString("cloudSyncStatus", "NOT_SYNCED")
-            )
+            CloudSyncStatus.valueOf(o.optString("cloudSyncStatus", "NOT_SYNCED"))
         } catch (e: Exception) {
-            io.github.saeargeir.skanniapp.model.CloudSyncStatus.NOT_SYNCED
-        }
+            CloudSyncStatus.NOT_SYNCED
+        },
+        firestoreId = o.optString("firestoreId", "").takeIf { it.isNotEmpty() }
     )
 }
