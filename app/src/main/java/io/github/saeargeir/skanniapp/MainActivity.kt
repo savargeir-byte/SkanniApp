@@ -29,7 +29,6 @@ import io.github.saeargeir.skanniapp.data.InvoiceStore
 import io.github.saeargeir.skanniapp.model.InvoiceRecord
 import io.github.saeargeir.skanniapp.ocr.AdvancedOcrProcessor
 import io.github.saeargeir.skanniapp.feedback.UserFeedbackManager
-import io.github.saeargeir.skanniapp.firebase.FirebaseDataService
 import java.time.LocalDate
 import java.util.*
 
@@ -37,7 +36,7 @@ class MainActivity : ComponentActivity() {
     private var auth: FirebaseAuth? = null
     private lateinit var authService: FirebaseAuthService
     private lateinit var invoiceStore: InvoiceStore
-    private lateinit var firebaseDataService: FirebaseDataService
+    // FirebaseDataService was replaced by InvoiceStore + FirebaseRepository background sync
     private lateinit var advancedOcrProcessor: AdvancedOcrProcessor
     private lateinit var userFeedbackManager: UserFeedbackManager
 
@@ -51,8 +50,7 @@ class MainActivity : ComponentActivity() {
         // Initialize InvoiceStore for persistent data
         invoiceStore = InvoiceStore(this)
         
-        // Initialize enhanced services
-        firebaseDataService = FirebaseDataService()
+    // Initialize enhanced services
         advancedOcrProcessor = AdvancedOcrProcessor(this)
         userFeedbackManager = UserFeedbackManager(this)
         
@@ -126,11 +124,23 @@ class MainActivity : ComponentActivity() {
                     // Vista reikninginn í bakgrunni
                     lifecycleScope.launch {
                         val parsedInvoice = IcelandicInvoiceParser.parseInvoiceText(scannedText)
+                        
+                        // Convert date string to timestamp (Long)
+                        val dateTimestamp = try {
+                            if (parsedInvoice.date != null) {
+                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                sdf.parse(parsedInvoice.date)?.time ?: System.currentTimeMillis()
+                            } else {
+                                System.currentTimeMillis()
+                            }
+                        } catch (e: Exception) {
+                            System.currentTimeMillis()
+                        }
+                        
                         val invoice = InvoiceRecord(
                             id = System.currentTimeMillis(),
-                            date = parsedInvoice.date ?: java.time.LocalDate.now().toString(),
-                            monthKey = (parsedInvoice.date ?: java.time.LocalDate.now().toString()).substring(0, 7),
-                            vendor = parsedInvoice.vendor,
+                            date = dateTimestamp,  // Long timestamp in milliseconds
+                            vendorName = parsedInvoice.vendor,
                             amount = parsedInvoice.amount,
                             vat = parsedInvoice.vat,
                             imagePath = imageUri?.toString() ?: "",
@@ -141,13 +151,9 @@ class MainActivity : ComponentActivity() {
                         // Apply learned corrections
                         val correctedInvoice = userFeedbackManager.applyLearnedCorrections(invoice)
                         
-                        // Save to local storage
-                        addNote(correctedInvoice)
-                        
-                        // Sync to cloud if user is authenticated
-                        if (auth?.currentUser != null) {
-                            firebaseDataService.saveInvoice(correctedInvoice)
-                        }
+                        // Save to local storage and trigger background Firebase sync (InvoiceStore handles upload)
+                        invoiceStore.add(correctedInvoice, imageUri)
+                        notes = invoiceStore.loadAll()
                         
                         // Fara á forsíðu með sjálfvirku skanni
                         showScanner = false
@@ -182,12 +188,12 @@ class MainActivity : ComponentActivity() {
                     // Sync with cloud before export
                     lifecycleScope.launch {
                         if (auth?.currentUser != null) {
-                            firebaseDataService.syncData(notes).onSuccess { syncResult ->
+                            invoiceStore.syncWithCloud(notes).onSuccess { syncResult ->
                                 notes = invoiceStore.loadAll() + syncResult.downloaded
                                 updateNotes(notes)
                             }
                         }
-                        
+
                         val csvFile = CsvExporter.exportMonthlyInvoiceReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                         if (csvFile != null) CsvExporter.shareViaCsv(this@MainActivity, csvFile)
                     }
@@ -195,12 +201,12 @@ class MainActivity : ComponentActivity() {
                 onExportJson = {
                     lifecycleScope.launch {
                         if (auth?.currentUser != null) {
-                            firebaseDataService.syncData(notes).onSuccess { syncResult ->
+                            invoiceStore.syncWithCloud(notes).onSuccess { syncResult ->
                                 notes = invoiceStore.loadAll() + syncResult.downloaded
                                 updateNotes(notes)
                             }
                         }
-                        
+
                         val jsonFile = JsonExporter.exportMonthlyReport(this@MainActivity, notes, selectedMonth.year, selectedMonth.monthValue)
                         if (jsonFile != null) JsonExporter.share(this@MainActivity, jsonFile)
                     }
@@ -409,15 +415,15 @@ class MainActivity : ComponentActivity() {
                 onCloudSync = {
                     lifecycleScope.launch {
                         if (auth?.currentUser != null) {
-                            firebaseDataService.syncData(notes).onSuccess { syncResult ->
+                            invoiceStore.syncWithCloud(notes).onSuccess { syncResult ->
                                 notes = invoiceStore.loadAll() + syncResult.downloaded
                                 updateNotes(notes)
-                                Toast.makeText(this@MainActivity, 
-                                    "Samstillt: ${syncResult.uploaded} upp, ${syncResult.downloaded.size} niður", 
+                                Toast.makeText(this@MainActivity,
+                                    "Samstillt: ${syncResult.uploaded} upp, ${syncResult.downloaded.size} niður",
                                     Toast.LENGTH_SHORT).show()
                             }.onFailure { error ->
-                                Toast.makeText(this@MainActivity, 
-                                    "Villa við samstillingu: ${error.message}", 
+                                Toast.makeText(this@MainActivity,
+                                    "Villa við samstillingu: ${error.message}",
                                     Toast.LENGTH_SHORT).show()
                             }
                         } else {
@@ -428,11 +434,11 @@ class MainActivity : ComponentActivity() {
                 onBackup = {
                     lifecycleScope.launch {
                         if (auth?.currentUser != null) {
-                            firebaseDataService.createBackup().onSuccess {
-                                Toast.makeText(this@MainActivity, "Öryggisafrit búið til", Toast.LENGTH_SHORT).show()
+                            invoiceStore.createBackup().onSuccess {
+                                Toast.makeText(this@MainActivity, "Öryggisafrit búið til: ${it.absolutePath}", Toast.LENGTH_SHORT).show()
                             }.onFailure { error ->
-                                Toast.makeText(this@MainActivity, 
-                                    "Villa við öryggisafrit: ${error.message}", 
+                                Toast.makeText(this@MainActivity,
+                                    "Villa við öryggisafrit: ${error.message}",
                                     Toast.LENGTH_SHORT).show()
                             }
                         } else {

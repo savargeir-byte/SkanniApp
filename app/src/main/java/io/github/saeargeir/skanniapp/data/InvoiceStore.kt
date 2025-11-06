@@ -8,9 +8,18 @@ import io.github.saeargeir.skanniapp.model.CloudSyncStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 
 /**
  * InvoiceStore with Firebase sync
@@ -122,6 +131,80 @@ class InvoiceStore(private val context: Context) {
             }
         } catch (e: Exception) {
             // Log error but don't crash the app
+        }
+    }
+
+    // Simple result wrapper for sync
+    data class SyncResult(val uploaded: Int, val downloaded: List<InvoiceRecord>)
+
+    /**
+     * Sync local invoices with Firebase: upload unsynced, download remote and merge.
+     * This is a suspend function and should be called from a coroutine.
+     */
+    suspend fun syncWithCloud(localNotes: List<InvoiceRecord>): Result<SyncResult> {
+        return try {
+            if (!firebaseRepo.isAuthenticated()) return Result.failure(IllegalStateException("Not authenticated"))
+
+            // 1) Upload unsynced local invoices
+            var uploaded = 0
+            val current = loadAll().toMutableList()
+
+            val unsynced = current.filter { it.cloudSyncStatus != io.github.saeargeir.skanniapp.model.CloudSyncStatus.SYNCED }
+
+            unsynced.forEach { rec ->
+                try {
+                    val res = firebaseRepo.uploadInvoice(rec, null)
+                    res.onSuccess { id ->
+                        uploaded += 1
+                        val updated = rec.copy(firestoreId = id, cloudSyncStatus = io.github.saeargeir.skanniapp.model.CloudSyncStatus.SYNCED)
+                        update(updated)
+                    }
+                } catch (e: Exception) {
+                    // ignore individual failures
+                }
+            }
+
+            // 2) Download remote invoices and merge into local
+            val fetched = firebaseRepo.fetchAllInvoicesOnce()
+            val downloaded = fetched.getOrDefault(emptyList())
+
+            // Merge: add any remote invoice that we don't have (by firestoreId)
+            val localByFirestore = loadAll().mapNotNull { it.firestoreId to it }.toMap()
+            var newAdded = 0
+            downloaded.forEach { remote ->
+                if (remote.firestoreId != null && !localByFirestore.containsKey(remote.firestoreId)) {
+                    // create a local id and mark as synced
+                    val localRecord = remote.copy(id = System.currentTimeMillis(), cloudSyncStatus = io.github.saeargeir.skanniapp.model.CloudSyncStatus.SYNCED)
+                    val cur = loadAll().toMutableList()
+                    cur.add(localRecord)
+                    saveAll(cur)
+                    newAdded += 1
+                }
+            }
+
+            Result.success(SyncResult(uploaded = uploaded, downloaded = downloaded))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Create a timestamped backup of all invoices to filesDir/backups/*.json
+     */
+    suspend fun createBackup(): Result<File> {
+        return try {
+            val all = loadAll()
+            val backupsDir = File(context.filesDir, "backups")
+            if (!backupsDir.exists()) backupsDir.mkdirs()
+
+            val fmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+            val f = File(backupsDir, "backup_${fmt.format(Date())}.json")
+            val arr = JSONArray()
+            all.forEach { arr.put(toJson(it)) }
+            f.writeText(arr.toString())
+            Result.success(f)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
