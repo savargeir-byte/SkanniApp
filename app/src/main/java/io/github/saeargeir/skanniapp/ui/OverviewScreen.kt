@@ -37,9 +37,12 @@ fun OverviewScreen(
     var expandedInvoice by remember { mutableStateOf<InvoiceRecord?>(null) }
     var showMenu by remember { mutableStateOf(false) }
 
-    val monthNotes = notes.filter {
-        val ym = YearMonth.parse(it.date.substring(0, 7))
-        ym == selectedMonth
+    val monthNotes = notes.filter { inv ->
+        try {
+            val cal = java.util.Calendar.getInstance().apply { timeInMillis = inv.date }
+            val ym = YearMonth.of(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
+            ym == selectedMonth
+        } catch (_: Exception) { false }
     }
     val totalAmount = monthNotes.sumOf { it.amount }
     val totalVat = monthNotes.sumOf { it.vat }
@@ -387,11 +390,11 @@ private fun InvoiceItem(
                 )
             }
             
-            Text(
-                invoice.date,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF2E7D32).copy(alpha = 0.7f)
-            )
+                Text(
+                    invoice.dateString,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF2E7D32).copy(alpha = 0.7f)
+                )
         }
     }
 }
@@ -431,7 +434,7 @@ private fun ExpandedInvoiceDialog(
                 DetailRow("Fyrirtæki:", invoice.vendor)
                 
                 // Date
-                DetailRow("Dagsetning:", invoice.date)
+                DetailRow("Dagsetning:", invoice.dateString)
                 
                 // Amount
                 DetailRow("Upphæð:", "${"%.2f".format(invoice.amount)} kr")

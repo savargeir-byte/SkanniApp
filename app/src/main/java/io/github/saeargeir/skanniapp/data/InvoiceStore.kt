@@ -189,7 +189,7 @@ class InvoiceStore(private val context: Context) {
     }
 
     /**
-     * Create a timestamped backup of all invoices to filesDir/backups/*.json
+     * Create a timestamped backup of all invoices to filesDir/backups/{timestamp}.json
      */
     suspend fun createBackup(): Result<File> {
         return try {

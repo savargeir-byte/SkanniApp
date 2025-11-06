@@ -39,7 +39,7 @@ fun InvoiceFormScreen(
 ) {
     var seljandi by remember { mutableStateOf(invoice?.vendor ?: "") }
     var reikningsnr by remember { mutableStateOf(invoice?.invoiceNumber ?: "") }
-    var dagsetning by remember { mutableStateOf(invoice?.date ?: "") }
+    var dagsetning by remember { mutableStateOf(invoice?.dateString ?: "") }
     var upphaeð by remember { mutableStateOf(invoice?.amount?.toString() ?: "") }
     var vsk by remember { mutableStateOf(invoice?.vat?.toString() ?: "") }
     var showMenu by remember { mutableStateOf(false) }

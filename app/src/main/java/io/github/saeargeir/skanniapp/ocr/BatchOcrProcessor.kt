@@ -166,11 +166,11 @@ class BatchOcrProcessor(
                 
                 if (text.isNotBlank()) {
                     val parsedInvoice = IcelandicInvoiceParser.parseInvoiceText(text)
+                    val nowMillis = System.currentTimeMillis()
                     val invoice = InvoiceRecord(
                         id = System.currentTimeMillis(),
-                        date = java.time.LocalDate.now().toString(),
-                        monthKey = java.time.LocalDate.now().toString().substring(0, 7),
-                        vendor = parsedInvoice.vendor,
+                        date = nowMillis,
+                        vendorName = parsedInvoice.vendor,
                         amount = parsedInvoice.amount,
                         vat = parsedInvoice.vat,
                         imagePath = receipt.imageUri.toString(),

@@ -213,7 +213,13 @@ class MainActivity : ComponentActivity() {
                 }
             )
             "notes" -> io.github.saeargeir.skanniapp.ui.NoteListScreen(
-                notes = notes.filter { it.date.startsWith(selectedMonth.toString()) },
+                notes = notes.filter {
+                    try {
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.date }
+                        val ym = java.time.YearMonth.of(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
+                        ym == selectedMonth
+                    } catch (_: Exception) { false }
+                },
                 selectedMonth = selectedMonth,
                 onMonthChange = { selectedMonth = it },
                 onBack = { navScreen = "home" },

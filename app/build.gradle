@@ -3,16 +3,27 @@ apply plugin: 'org.jetbrains.kotlin.android'
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'kotlin-kapt'
 
+// Use a custom build directory to avoid Windows file locking on app-release.aab
+// This keeps Gradle outputs under app/build_android3 instead of app/build
+buildDir = file('build_android3')
+
+// Load release signing credentials from keystore.properties at the project root
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace 'io.github.saeargeir.skanniapp'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
-        applicationId 'io.github.saeargeir.skanniapp'
+    applicationId 'is.iceveflausnir.skanniapp'
         minSdk 26
-        targetSdk 34
-        versionCode 236
-        versionName "2.0.36"
+    targetSdk 35
+    versionCode 239
+    versionName "2.0.37"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -20,10 +31,23 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            if (keystoreProperties != null && !keystoreProperties.isEmpty()) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Ensure the Play upload bundle is signed with the upload key
+            signingConfig signingConfigs.release
         }
     }
     
